@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Expedition 33 — Build Reference</title>
+<style>
+  :root{
+    --bg:#0f1115; --card:#181b22; --card2:#1f232c; --accent:#c9a15a;
+    --text:#eae6df; --sub:#9aa0ab; --good:#6fbf73; --warn:#e0a458; --bad:#d9695f;
+    --border:#2a2f3a;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    padding-bottom:60px;
+  }
+  header{
+    position:sticky; top:0; z-index:50; background:var(--bg);
+    padding:14px 16px 8px; border-bottom:1px solid var(--border);
+  }
+  h1{font-size:1.15rem; margin:0 0 8px; color:var(--accent); letter-spacing:.5px;}
+  .levelbar{display:flex; gap:8px; align-items:center; margin-bottom:8px;}
+  .levelbar input[type=range]{flex:1;}
+  .levelbar .lvlnum{
+    background:var(--card2); border:1px solid var(--border); border-radius:8px;
+    padding:4px 10px; font-weight:600; min-width:42px; text-align:center;
+  }
+  nav{display:flex; overflow-x:auto; gap:6px; padding:4px 0 2px;}
+  nav button{
+    flex:0 0 auto; background:var(--card2); color:var(--sub); border:1px solid var(--border);
+    border-radius:20px; padding:7px 14px; font-size:.82rem; white-space:nowrap;
+  }
+  nav button.active{background:var(--accent); color:#1a1400; border-color:var(--accent); font-weight:600;}
+  main{padding:14px 16px 40px; max-width:760px; margin:0 auto;}
+  section{display:none;}
+  section.active{display:block;}
+  .card{
+    background:var(--card); border:1px solid var(--border); border-radius:12px;
+    padding:14px; margin-bottom:12px;
+  }
+  .card h2{margin:0 0 6px; font-size:1rem; color:var(--accent);}
+  .card h3{margin:10px 0 4px; font-size:.88rem; color:var(--text); opacity:.9;}
+  .tag{display:inline-block; font-size:.7rem; padding:2px 8px; border-radius:10px; margin-right:4px; margin-bottom:4px;}
+  .tag.tier1{background:#2c3e2c; color:var(--good);}
+  .tag.tier2{background:#3a3220; color:var(--warn);}
+  .tag.tier3{background:#3a2a24; color:var(--warn);}
+  .tag.tier4{background:#3a2424; color:var(--bad);}
+  .priority{font-size:.95rem; font-weight:600; margin:4px 0;}
+  ul{margin:6px 0 6px 18px; padding:0; font-size:.9rem; line-height:1.5;}
+  li{margin-bottom:2px;}
+  .sub{color:var(--sub); font-size:.82rem;}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:8px;}
+  .stat-pill{
+    background:var(--card2); border:1px solid var(--border); border-radius:8px;
+    padding:8px 10px; font-size:.82rem;
+  }
+  .stat-pill b{color:var(--accent); display:block; font-size:.78rem; margin-bottom:2px;}
+  .active-tier{border:1px solid var(--accent) !important; box-shadow:0 0 0 1px var(--accent) inset;}
+  .checklist label{
+    display:flex; align-items:flex-start; gap:8px; font-size:.88rem; margin-bottom:6px; cursor:pointer;
+  }
+  .checklist input{margin-top:3px;}
+  .checklist input:checked + span{ text-decoration:line-through; color:var(--sub);}
+  .divider{border-top:1px solid var(--border); margin:10px 0;}
+  .footer-note{color:var(--sub); font-size:.75rem; text-align:center; margin-top:20px;}
+  select{
+    background:var(--card2); color:var(--text); border:1px solid var(--border);
+    border-radius:8px; padding:8px; font-size:.9rem; width:100%;
+  }
+  .badge-row{display:flex; flex-wrap:wrap; gap:6px; margin-top:4px;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>⚔ Expedition 33 — Build Reference</h1>
+  <div class="levelbar">
+    <span class="sub">Lv</span>
+    <input type="range" id="lvlSlider" min="1" max="99" value="12">
+    <span class="lvlnum" id="lvlDisplay">12</span>
+  </div>
+  <nav id="tabnav"></nav>
+</header>
+
+<main id="mainContent"></main>
+
+<div class="footer-note">Save to Home Screen (Safari ▸ Share ▸ Add to Home Screen) for app-like access. Progress checkboxes save locally on this device.</div>
+
+<script>
+const tiers = [
+  {id:'t1', range:[1,20], name:'Tier 1 · Survival', priority:'Vitality &gt; Agility &gt; Might',
+   detail:'Front-load Vitality while you learn to dodge/parry. Add Agility so enemies don\'t out-turn you. Skip Defense and Luck almost entirely — Defense is weak, Luck is capped by the 9,999 damage limit this early.'},
+  {id:'t2', range:[20,45], name:'Tier 2 · Vitality Peak', priority:'Vitality (push to ~45) &gt; Weapon-scaling stat &gt; Agility',
+   detail:'This is Vitality\'s strongest HP-per-point window. Start splitting into whichever stat your current weapon scales highest on (check its S–D letter grade).'},
+  {id:'t3', range:[45,66], name:'Tier 3 · Agility Window', priority:'Agility (soft cap ~47, extend to 66) &gt; Might/weapon stat &gt; a few Luck points',
+   detail:'Agility softens around 47 but is still worth extending to 66 if you\'re getting outsped. Cheap early Luck thresholds (~11, 15, 35 pts) unlock efficient crit-rate jumps.'},
+  {id:'t4', range:[66,99], name:'Tier 4 · Damage Scaling', priority:'Might &gt; Luck &gt; Agility spillover &gt; Defense (only if weapon scales)',
+   detail:'Once the damage cap lifts (~Act 3 / Painted Power Picto), Might and full Luck/crit investment finally pay off. Only prioritize Defense if a specific weapon scales heavily on it.'},
+];
+
+const characters = {
+  gustave: {
+    label:'Gustave', role:'Burst DPS / Free Aim',
+    attrs:'Luck, Might — multi-hit skills compound well with crit chance.',
+    early:['Marking Shots (Lumina) — debuff before allies act','Burning Shots (Lumina) — cheap Burn application','Dodger (Lumina) — 1 AP on perfect dodge'],
+    mid:['Energising Turn / Start — steady AP flow','Augmented Counter I→III as you get counter-heavy'],
+    late:['Painted Power — removes 9,999 dmg cap','Cheater — act twice per turn','Energy Master — +1 all AP gains','Warming Up — stacking dmg over a fight'],
+    note:'Prioritize supportive/debuff Pictos early since he sets up the party before others act.'
+  },
+  lune: {
+    label:'Lune', role:'Elemental / Burn Support-DPS',
+    attrs:'Vitality, Defense — she\'s your primary healer/support, survivability first.',
+    early:['Burn Affinity — +dmg on burning targets','Dead Energy II — AP on kill','Dodger'],
+    mid:['Energising Burn — AP on applying Burn','Double Burn — 2 stacks per application'],
+    late:['Painted Power','Cheater','Energy Master','Feint / Frenzy for skill-hit scaling'],
+    note:'Crit Rate feeds her Elemental Trick for Stains; Burn stacking is her core damage loop.'
+  },
+  maelle: {
+    label:'Maelle', role:'Parry/Dodge Crit DPS',
+    attrs:'Agility, Luck — goes first to apply weaknesses, then lands crits with multi-hit skills.',
+    early:['Empowering Parry — +dmg per successful parry','Charging Critical — gradient charge on crit','Shortcut — emergency heal-turn below 30% HP'],
+    mid:['Confident Fighter — +30% dmg, no healing (once stable)','Auto Powerful / First Strike'],
+    late:['Immaculate, Glass Canon, Inverted Affinity — Act 3 core trio','Painted Power','Healing Counter + Energising Parry for sustain'],
+    note:'Late game: dodge/parry to keep the Glass Canon/Inverted Affinity risk safe while damage stacks massively.'
+  },
+  sciel: {
+    label:'Sciel', role:'Speed / Fortune DPS',
+    attrs:'Might, Luck — classic multi-hit DPS profile, similar to Gustave.',
+    early:['Marking Shots / Burning Shots','Dead Energy II'],
+    mid:['Warming Up — stacking dmg per turn','Full Strength — dmg boost at full HP'],
+    late:['Cheater — extra turn to set up Fortune\'s Fury','Painted Power','Second Chance for safety net'],
+    note:'Speed + offensive stats matter most for landing Fortune\'s Fury windows.'
+  },
+  verso: {
+    label:'Verso', role:'Parry Tank/Support-DPS',
+    attrs:'Vitality, Agility — relies on dodge/parry rather than raw Defense.',
+    early:['Augmented Counter I','Perilous Parry (careful: doubles dmg taken)','Confident Fighter (once comfortable)'],
+    mid:['Auto Rush, Charging Tint','Critical Burn'],
+    late:['Confident Fighter + Glass Canon combo for max dmg amplification','Painted Power','Free Aim Luminas to boost Follow Up skill'],
+    note:'Damage scales almost entirely off successful parries — invest Luminas around parry chains.'
+  },
+  monoco: {
+    label:'Monoco', role:'Flexible / Absorb-based',
+    attrs:'Agility, Luck as safe defaults — kit shifts based on absorbed enemies, so stay flexible.',
+    early:['Empowering Parry','Energising Parry','AP-focused Luminas'],
+    mid:['Break-focused Luminas (Breaker, Breaking Counter)','More AP generation for consistent absorb-skill use'],
+    late:['Immaculate, Energising Parry, Empowering Parry — Act 3 core trio','Painted Power'],
+    note:'Because his skills change with absorbed enemies, prioritize AP economy and parry survivability over fixed dmg Luminas.'
+  }
+};
+
+const universalPictos = [
+  {name:'Painted Power', note:'Removes 9,999 dmg cap — get ASAP in Act 2, equip on whole party once unlocked.'},
+  {name:'Cheater', note:'Always act twice — one of the strongest Luminas in the game once affordable.'},
+  {name:'Energy Master', note:'+1 to all AP gain sources — snowballs with any AP-generation build.'},
+  {name:'Second Chance', note:'Revive once per battle at full HP — great safety net for your main DPS.'},
+  {name:'Warming Up', note:'+5% dmg/turn, stacks to 5 — free damage in any fight that runs long.'},
+  {name:'First Strike', note:'Guarantees your party acts before dangerous bosses that open with big hits.'},
+];
+
+function buildTabs(){
+  const nav = document.getElementById('tabnav');
+  const tabs = [
+    {id:'overview', label:'Overview'},
+    {id:'attributes', label:'Attributes'},
+    {id:'pictos', label:'Universal Pictos'},
+    ...Object.keys(characters).map(k=>({id:k, label:characters[k].label})),
+    {id:'checklist', label:'My Progress'}
+  ];
+  tabs.forEach((t,i)=>{
+    const b = document.createElement('button');
+    b.textContent = t.label;
+    b.dataset.tab = t.id;
+    if(i===0) b.classList.add('active');
+    b.onclick = ()=>switchTab(t.id);
+    nav.appendChild(b);
+  });
+}
+
+function switchTab(id){
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active', b.dataset.tab===id));
+  document.querySelectorAll('section').forEach(s=>s.classList.toggle('active', s.id===id));
+}
+
+function currentTier(level){
+  return tiers.find(t=> level>=t.range[0] && level<=t.range[1]) || tiers[tiers.length-1];
+}
+
+function renderOverview(level){
+  const t = currentTier(level);
+  return `
+  <div class="card active-tier">
+    <h2>Right now — Level ${level}</h2>
+    <div class="sub">${t.name} (Lv ${t.range[0]}–${t.range[1]})</div>
+    <div class="priority">${t.priority}</div>
+    <p class="sub">${t.detail}</p>
+  </div>
+  <div class="card">
+    <h2>How to use this guide</h2>
+    <ul>
+      <li>Drag the level slider up top to match your current character level — the Overview tab updates automatically.</li>
+      <li>Check the <b>Attributes</b> tab for the full tier breakdown across all levels.</li>
+      <li>Check each character's tab for their attribute lean, Picto/Lumina priorities by game stage, and playstyle notes.</li>
+      <li>Use the <b>My Progress</b> tab to track key must-get Pictos as you unlock them.</li>
+    </ul>
+  </div>`;
+}
+
+function renderAttributes(level){
+  let html = '';
+  tiers.forEach(t=>{
+    const active = level>=t.range[0] && level<=t.range[1];
+    html += `
+    <div class="card ${active?'active-tier':''}">
+      <h2>${t.name} <span class="sub">(Lv ${t.range[0]}–${t.range[1]})</span></h2>
+      <div class="priority">${t.priority}</div>
+      <p class="sub">${t.detail}</p>
+    </div>`;
+  });
+  html += `
+  <div class="card">
+    <h2>Attribute effects cheat sheet</h2>
+    <div class="grid2">
+      <div class="stat-pill"><b>Vitality</b>Max HP, best returns early-mid</div>
+      <div class="stat-pill"><b>Might</b>All damage dealt</div>
+      <div class="stat-pill"><b>Agility</b>Turn frequency / speed</div>
+      <div class="stat-pill"><b>Defense</b>Dmg reduction, weakest overall</div>
+      <div class="stat-pill"><b>Luck</b>Crit chance, best after dmg-cap removal</div>
+    </div>
+  </div>`;
+  return html;
+}
+
+function renderPictos(){
+  let html = `<div class="card"><h2>Must-get Pictos (any character)</h2><ul>`;
+  universalPictos.forEach(p=>{
+    html += `<li><b>${p.name}</b> — <span class="sub">${p.note}</span></li>`;
+  });
+  html += `</ul></div>`;
+  return html;
+}
+
+function renderCharacter(key){
+  const c = characters[key];
+  return `
+  <div class="card">
+    <h2>${c.label} <span class="sub">— ${c.role}</span></h2>
+    <div class="priority">Attributes: ${c.attrs}</div>
+  </div>
+  <div class="card">
+    <h3>Early game (Act 1)</h3>
+    <ul>${c.early.map(x=>`<li>${x}</li>`).join('')}</ul>
+    <div class="divider"></div>
+    <h3>Mid game</h3>
+    <ul>${c.mid.map(x=>`<li>${x}</li>`).join('')}</ul>
+    <div class="divider"></div>
+    <h3>Late game / Act 3+</h3>
+    <ul>${c.late.map(x=>`<li>${x}</li>`).join('')}</ul>
+  </div>
+  <div class="card">
+    <h3>Playstyle note</h3>
+    <p class="sub">${c.note}</p>
+  </div>`;
+}
+
+function renderChecklist(){
+  const items = [
+    'Painted Power unlocked (Act 2 boss)',
+    'Cheater unlocked (Sprong boss)',
+    'Energy Master (Serpenphare, Act 3)',
+    'Second Chance (Renoir, The Monolith)',
+    'First Strike (Act 1, Stone Wave Cliffs)',
+    'Respec item (Recoat) obtained',
+    'All characters have full Lumina slots equipped',
+    'Checked weapon letter-grade scaling before last attribute dump',
+  ];
+  let html = `<div class="card"><h2>Progress checklist</h2><div class="checklist">`;
+  items.forEach((it,i)=>{
+    html += `<label><input type="checkbox" data-idx="${i}"><span>${it}</span></label>`;
+  });
+  html += `</div></div>`;
+  return html;
+}
+
+function renderAll(level){
+  const main = document.getElementById('mainContent');
+  main.innerHTML = `
+    <section id="overview" class="active">${renderOverview(level)}</section>
+    <section id="attributes">${renderAttributes(level)}</section>
+    <section id="pictos">${renderPictos()}</section>
+    ${Object.keys(characters).map(k=>`<section id="${k}">${renderCharacter(k)}</section>`).join('')}
+    <section id="checklist">${renderChecklist()}</section>
+  `;
+  loadChecklist();
+}
+
+function loadChecklist(){
+  const saved = JSON.parse(localStorage.getItem('e33_checklist')||'{}');
+  document.querySelectorAll('.checklist input').forEach(cb=>{
+    const idx = cb.dataset.idx;
+    cb.checked = !!saved[idx];
+    cb.addEventListener('change', ()=>{
+      const s = JSON.parse(localStorage.getItem('e33_checklist')||'{}');
+      s[idx] = cb.checked;
+      localStorage.setItem('e33_checklist', JSON.stringify(s));
+    });
+  });
+}
+
+const slider = document.getElementById('lvlSlider');
+const lvlDisplay = document.getElementById('lvlDisplay');
+const savedLevel = localStorage.getItem('e33_level');
+if(savedLevel) slider.value = savedLevel;
+lvlDisplay.textContent = slider.value;
+
+slider.addEventListener('input', ()=>{
+  lvlDisplay.textContent = slider.value;
+  localStorage.setItem('e33_level', slider.value);
+  renderAll(parseInt(slider.value,10));
+});
+
+buildTabs();
+renderAll(parseInt(slider.value,10));
+</script>
+</body>
+</html>
