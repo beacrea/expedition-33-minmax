@@ -8,7 +8,7 @@
  * IMPORTANT: bump CACHE_VERSION whenever you edit js/data.js, css/styles.css,
  * or index.html — otherwise returning visitors keep the cached copy.
  */
-var CACHE_VERSION = 'v3';
+var CACHE_VERSION = 'v4';
 var CACHE_NAME = 'e33-guide-' + CACHE_VERSION;
 
 var SHELL = [
@@ -24,20 +24,56 @@ var SHELL = [
   './icons/apple-touch-icon.png'
 ];
 
+/**
+ * Precache the shell, bypassing the HTTP cache.
+ *
+ * cache.addAll() fetches through the normal HTTP cache. GitHub Pages serves
+ * everything with `Cache-Control: max-age=600`, so a visitor who returns
+ * within ten minutes of a deploy would have the *old* files copied into the
+ * *new* cache — and because we serve cache-first, that stale copy would then
+ * be pinned until the next version bump. Tested and confirmed: bumping the
+ * version alone did not deliver the update.
+ *
+ * `cache: 'reload'` forces each request to the network. The puts are also
+ * all-or-nothing: if any file fails, install rejects and the old worker
+ * stays in charge, so we never activate a half-updated, mixed-version shell.
+ * Mixed versions are the dangerous case, because stale app.js against fresh
+ * data.js is exactly how a migration corrupts saved progress.
+ */
 self.addEventListener('install', function (event) {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(function (cache) { return cache.addAll(SHELL); })
+      .then(function (cache) {
+        return Promise.all(SHELL.map(function (url) {
+          return fetch(new Request(url, { cache: 'reload' })).then(function (response) {
+            if (!response || !response.ok) {
+              throw new Error('precache failed for ' + url + ' (' + (response && response.status) + ')');
+            }
+            return cache.put(url, response);
+          });
+        }));
+      })
       .then(function () { return self.skipWaiting(); })
   );
 });
 
+/**
+ * Drop caches from previous versions.
+ *
+ * This only touches the Cache Storage API, which holds HTTP responses.
+ * localStorage lives in a separate store and is untouched by caches.delete(),
+ * so user progress survives every update. Verified by loading saved progress,
+ * shipping a new version, and confirming the ticks and level came through the
+ * cache swap intact. Do not add storage clearing here.
+ */
 self.addEventListener('activate', function (event) {
   event.waitUntil(
     caches.keys()
       .then(function (keys) {
         return Promise.all(keys.map(function (key) {
-          if (key !== CACHE_NAME) return caches.delete(key);
+          if (key.indexOf('e33-guide-') === 0 && key !== CACHE_NAME) {
+            return caches.delete(key);
+          }
         }));
       })
       .then(function () { return self.clients.claim(); })

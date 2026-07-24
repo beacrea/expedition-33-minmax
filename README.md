@@ -44,6 +44,18 @@ Two rules:
    localStorage keys for saved progress. Appending and reordering are safe;
    renaming silently moves someone's ticks to the wrong row.
 
+The worker precaches with `cache: 'reload'`, which is load-bearing. GitHub
+Pages serves everything with `max-age=600`, and `cache.addAll()` reads through
+the HTTP cache — so a visitor returning within ten minutes of a deploy would
+have the *old* files copied into the *new* cache and pinned there by
+cache-first serving. That was reproduced before the fix: bumping the version
+alone did not deliver the update. Precaching is also all-or-nothing, so a
+failed file leaves the previous version in charge rather than activating a
+mixed-version shell.
+
+An update reaches an open tab on the second load: the first fetches the new
+worker, the second is served by it.
+
 ## Mobile / touch notes
 
 The UI is built touch-first. If you change the header or checklist, keep these:

@@ -9,8 +9,25 @@
 
   var STORAGE_KEYS = {
     checklist: 'e33_checklist',
-    level: 'e33_level'
+    level: 'e33_level',
+    schema: 'e33_schema',
+    backup: 'e33_backup'
   };
+
+  var SCHEMA_VERSION = 2;
+
+  /**
+   * Frozen record of the v1 checklist order.
+   *
+   * v1 saved ticks under array indices, so the meaning of "3" was fixed by
+   * the order the list happened to have then. checklistItems is free to be
+   * reordered or extended; this array is history and must never change,
+   * or someone's old save will be reinterpreted onto the wrong rows.
+   */
+  var LEGACY_V1_IDS = [
+    'painted-power', 'cheater', 'energy-master', 'second-chance',
+    'first-strike', 'recoat', 'lumina-slots', 'weapon-scaling'
+  ];
 
   var DEFAULT_LEVEL = 12;
   var MIN_LEVEL = 1;
@@ -30,16 +47,34 @@
    * --------------------------------------------------------------- */
 
   function readJSON(key, fallback) {
+    var raw;
     try {
-      var raw = window.localStorage.getItem(key);
-      if (!raw) return fallback;
-      var parsed = JSON.parse(raw);
-      if (!parsed || typeof parsed !== 'object') return fallback;
-      return parsed;
+      raw = window.localStorage.getItem(key);
     } catch (err) {
-      console.warn('[e33] could not read "' + key + '", using default', err);
+      reportStorageFailure('read');
       return fallback;
     }
+    if (!raw) return fallback;
+    try {
+      var parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') throw new Error('not an object');
+      return parsed;
+    } catch (err) {
+      // Do not discard it. Park the unreadable value under its own key so
+      // the next write cannot overwrite the only copy of it.
+      quarantine(key, raw);
+      return fallback;
+    }
+  }
+
+  function quarantine(key, raw) {
+    try {
+      var qk = key + '__unreadable';
+      if (window.localStorage.getItem(qk) === null) {
+        window.localStorage.setItem(qk, raw);
+      }
+      console.warn('[e33] "' + key + '" was unreadable; kept a copy at "' + qk + '"');
+    } catch (err) { /* out of room to even quarantine it */ }
   }
 
   function writeJSON(key, value) {
@@ -48,6 +83,7 @@
       return true;
     } catch (err) {
       console.warn('[e33] could not save "' + key + '"', err);
+      reportStorageFailure('write');
       return false;
     }
   }
@@ -63,29 +99,147 @@
   function writeRaw(key, value) {
     try {
       window.localStorage.setItem(key, value);
+      return true;
     } catch (err) {
       console.warn('[e33] could not save "' + key + '"', err);
+      reportStorageFailure('write');
+      return false;
     }
   }
 
   /**
-   * v1 stored checklist state under array indices ({"0":true}). v2 uses
-   * stable string ids so rows can be reordered. Migrate once, in place.
+   * Saving can fail for reasons the user can act on — Safari private mode,
+   * a full quota, storage disabled. Failing silently is the worst outcome:
+   * they keep ticking boxes believing progress is kept. Say so once.
    */
-  function migrateChecklist(state) {
+  var storageWarned = false;
+  function reportStorageFailure() {
+    if (storageWarned) return;
+    storageWarned = true;
+    var el = document.getElementById('storageWarning');
+    if (el) el.hidden = false;
+  }
+
+  /**
+   * Take a one-time snapshot of the raw stored values before anything
+   * rewrites them. Written once and never overwritten, so a later buggy
+   * migration cannot destroy the evidence of what was originally there.
+   */
+  function backupOnce(reason) {
+    try {
+      if (window.localStorage.getItem(STORAGE_KEYS.backup) !== null) return;
+      window.localStorage.setItem(STORAGE_KEYS.backup, JSON.stringify({
+        reason: reason,
+        takenAt: new Date().toISOString(),
+        checklist: window.localStorage.getItem(STORAGE_KEYS.checklist),
+        level: window.localStorage.getItem(STORAGE_KEYS.level)
+      }));
+    } catch (err) {
+      console.warn('[e33] could not snapshot before migrating', err);
+    }
+  }
+
+  /**
+   * Bring stored progress up to the current schema.
+   *
+   * v1 kept ticks under array indices ({"0":true}); v2 uses stable string
+   * ids. The rules here are deliberately conservative:
+   *
+   *   - it runs only when the recorded schema is behind, so it is
+   *     idempotent and a normal launch never rewrites saved data;
+   *   - it snapshots the old values first;
+   *   - it never drops an entry it cannot interpret. An unrecognised key
+   *     is carried across untouched rather than deleted, because a tick we
+   *     cannot place is still information, and deleting it is unrecoverable.
+   */
+  function migrateChecklist() {
+    var stored = readJSON(STORAGE_KEYS.checklist, null);
+    var recorded = parseInt(readRaw(STORAGE_KEYS.schema), 10);
+
+    if (stored === null) {
+      // Nothing saved yet, or unreadable and already quarantined.
+      writeRaw(STORAGE_KEYS.schema, String(SCHEMA_VERSION));
+      return {};
+    }
+
+    if (recorded === SCHEMA_VERSION) return stored;
+
+    backupOnce('schema ' + (recorded || 'unversioned') + ' -> ' + SCHEMA_VERSION);
+
     var migrated = {};
-    var changed = false;
-    Object.keys(state).forEach(function (key) {
+    var mapped = 0;
+    var carried = 0;
+
+    Object.keys(stored).forEach(function (key) {
       if (/^\d+$/.test(key)) {
-        var item = data.checklistItems[Number(key)];
-        if (item) migrated[item.id] = !!state[key];
-        changed = true;
+        var id = LEGACY_V1_IDS[Number(key)];
+        if (id) {
+          migrated[id] = !!stored[key];
+          mapped++;
+        } else {
+          migrated[key] = !!stored[key];
+          carried++;
+        }
       } else {
-        migrated[key] = !!state[key];
+        // Already an id. Possibly one that has since been retired — keep it.
+        migrated[key] = !!stored[key];
       }
     });
-    if (changed) writeJSON(STORAGE_KEYS.checklist, migrated);
+
+    if (writeJSON(STORAGE_KEYS.checklist, migrated)) {
+      writeRaw(STORAGE_KEYS.schema, String(SCHEMA_VERSION));
+      console.info('[e33] checklist migrated to schema v' + SCHEMA_VERSION +
+        ' (' + mapped + ' mapped, ' + carried + ' kept unresolved)');
+    }
     return migrated;
+  }
+
+  /* ---------------------------------------------------------------
+   * Backup and restore
+   *
+   * localStorage is per-origin and the browser may clear it: iOS evicts
+   * script-written storage for sites left unvisited, "clear site data"
+   * takes it, and moving this app to a custom domain would leave it
+   * behind. An export is the only thing that survives all of those.
+   * --------------------------------------------------------------- */
+
+  function exportProgress() {
+    return JSON.stringify({
+      app: 'expedition-33-build-reference',
+      schema: SCHEMA_VERSION,
+      exportedAt: new Date().toISOString(),
+      level: readRaw(STORAGE_KEYS.level),
+      checklist: readJSON(STORAGE_KEYS.checklist, {})
+    }, null, 2);
+  }
+
+  /**
+   * Merge an exported file back in. Ticks are unioned rather than replaced
+   * so restoring an older backup onto a further-along device cannot lose
+   * the newer progress.
+   */
+  function importProgress(text) {
+    var payload = JSON.parse(text);
+    if (!payload || typeof payload !== 'object' || !payload.checklist) {
+      throw new Error('That file does not look like an Expedition 33 backup.');
+    }
+    backupOnce('before import');
+
+    var current = readJSON(STORAGE_KEYS.checklist, {});
+    var merged = {};
+    var k;
+    for (k in current) if (Object.prototype.hasOwnProperty.call(current, k)) merged[k] = current[k];
+    for (k in payload.checklist) {
+      if (Object.prototype.hasOwnProperty.call(payload.checklist, k)) {
+        merged[k] = merged[k] || !!payload.checklist[k];
+      }
+    }
+    writeJSON(STORAGE_KEYS.checklist, merged);
+
+    var lvl = parseInt(payload.level, 10);
+    if (lvl >= MIN_LEVEL && lvl <= MAX_LEVEL) writeRaw(STORAGE_KEYS.level, String(lvl));
+
+    return Object.keys(merged).filter(function (key) { return merged[key]; }).length;
   }
 
   /* ---------------------------------------------------------------
@@ -187,7 +341,73 @@
                    '<span>' + item.label + '</span></label>';
           }).join('') +
         '</div>' +
+      '</div>' +
+      '<div class="card">' +
+        '<h3>Backup</h3>' +
+        '<p class="sub">Progress is stored on this device only. Export a copy ' +
+        'before clearing browser data, or to move it to another phone.</p>' +
+        '<div class="backup-row">' +
+          '<button type="button" class="btn" id="exportBtn">Export progress</button>' +
+          '<button type="button" class="btn" id="importBtn">Restore from file</button>' +
+          '<input type="file" id="importFile" accept="application/json,.json" hidden>' +
+        '</div>' +
+        '<p class="sub backup-status" id="backupStatus" role="status"></p>' +
       '</div>';
+  }
+
+  function wireBackup() {
+    var exportBtn = document.getElementById('exportBtn');
+    var importBtn = document.getElementById('importBtn');
+    var fileInput = document.getElementById('importFile');
+    var status = document.getElementById('backupStatus');
+    if (!exportBtn || !importBtn || !fileInput) return;
+
+    // Re-query each time: a restore rebuilds the section, replacing this node.
+    function say(msg) {
+      var el = document.getElementById('backupStatus');
+      if (el) el.textContent = msg;
+    }
+
+    exportBtn.addEventListener('click', function () {
+      var stamp = new Date().toISOString().slice(0, 10);
+      var blob = new Blob([exportProgress()], { type: 'application/json' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'expedition33-progress-' + stamp + '.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      // Revoking immediately can cancel the download on some mobile browsers.
+      setTimeout(function () { URL.revokeObjectURL(url); }, 30000);
+      say('Exported expedition33-progress-' + stamp + '.json');
+    });
+
+    importBtn.addEventListener('click', function () { fileInput.click(); });
+
+    fileInput.addEventListener('change', function () {
+      var file = fileInput.files && fileInput.files[0];
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function () {
+        try {
+          var count = importProgress(String(reader.result));
+          var restoredLevel = parseInt(readRaw(STORAGE_KEYS.level), 10);
+          buildSections(currentLevel);
+          if (restoredLevel >= MIN_LEVEL && restoredLevel <= MAX_LEVEL) {
+            setLevel(restoredLevel, 'force');
+            els.slider.value = restoredLevel;
+          }
+          switchTab('checklist');
+          say('Restored. ' + count + ' item' + (count === 1 ? '' : 's') + ' ticked.');
+        } catch (err) {
+          say(err.message || 'Could not read that file.');
+        }
+      };
+      reader.onerror = function () { say('Could not read that file.'); };
+      reader.readAsText(file);
+      fileInput.value = '';
+    });
   }
 
   /* ---------------------------------------------------------------
@@ -289,6 +509,7 @@
     }).join('');
 
     wireChecklist();
+    wireBackup();
   }
 
   function updateLevelSections(level) {
@@ -297,7 +518,7 @@
   }
 
   function wireChecklist() {
-    var state = migrateChecklist(readJSON(STORAGE_KEYS.checklist, {}));
+    var state = migrateChecklist();
     els.main.querySelectorAll('.checklist input').forEach(function (cb) {
       var id = cb.dataset.id;
       cb.checked = !!state[id];
