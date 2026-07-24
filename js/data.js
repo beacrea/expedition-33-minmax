@@ -11,25 +11,30 @@
 var E33_DATA = (function () {
   'use strict';
 
-  /* Attribute allocation priority by level band. `range` is inclusive. */
+  /*
+   * Attribute allocation priority by level band.
+   * `range` is inclusive on both ends and the bands must not overlap —
+   * lookup takes the first match, so a shared boundary would always
+   * resolve to the lower tier.
+   */
   var tiers = [
     {
       id: 't1',
-      range: [1, 20],
+      range: [1, 19],
       name: 'Tier 1 · Survival',
       priority: 'Vitality &gt; Agility &gt; Might',
       detail: "Front-load Vitality while you learn to dodge/parry. Add Agility so enemies don't out-turn you. Skip Defense and Luck almost entirely — Defense is weak, Luck is capped by the 9,999 damage limit this early."
     },
     {
       id: 't2',
-      range: [20, 45],
+      range: [20, 44],
       name: 'Tier 2 · Vitality Peak',
       priority: 'Vitality (push to ~45) &gt; Weapon-scaling stat &gt; Agility',
       detail: "This is Vitality's strongest HP-per-point window. Start splitting into whichever stat your current weapon scales highest on (check its S–D letter grade)."
     },
     {
       id: 't3',
-      range: [45, 66],
+      range: [45, 65],
       name: 'Tier 3 · Agility Window',
       priority: 'Agility (soft cap ~47, extend to 66) &gt; Might/weapon stat &gt; a few Luck points',
       detail: "Agility softens around 47 but is still worth extending to 66 if you're getting outsped. Cheap early Luck thresholds (~11, 15, 35 pts) unlock efficient crit-rate jumps."
