@@ -1,9 +1,33 @@
 {
+  "id": "/expedition-33-minmax/",
   "name": "Expedition 33 Build Reference",
   "short_name": "E33 Guide",
-  "start_url": "./index.html",
+  "description": "Attribute allocation, Picto/Lumina priorities, and per-character build notes for Clair Obscur: Expedition 33.",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#0f1115",
   "theme_color": "#0f1115",
-  "icons": []
+  "categories": ["games", "reference", "utilities"],
+  "icons": [
+    {
+      "src": "./icons/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-maskable-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "maskable"
+    }
+  ]
 }
