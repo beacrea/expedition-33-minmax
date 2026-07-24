@@ -13,6 +13,8 @@
   };
 
   var DEFAULT_LEVEL = 12;
+  var MIN_LEVEL = 1;
+  var MAX_LEVEL = 99;
 
   /* ---------------------------------------------------------------
    * Storage helpers
@@ -221,14 +223,46 @@
   }
 
   function switchTab(id) {
+    var activeBtn = null;
+
     els.nav.querySelectorAll('button').forEach(function (b) {
       var on = b.dataset.tab === id;
       b.classList.toggle('active', on);
       b.setAttribute('aria-selected', on ? 'true' : 'false');
+      if (on) activeBtn = b;
     });
     els.main.querySelectorAll('section').forEach(function (s) {
       s.classList.toggle('active', s.id === id);
     });
+
+    // Tabs are separate documents as far as the reader is concerned. Without
+    // this you keep the previous tab's scroll offset and land partway down
+    // the new one, with its heading already off-screen.
+    window.scrollTo(0, 0);
+
+    if (activeBtn) ensureTabVisible(activeBtn);
+  }
+
+  /* Keep the selected chip fully on screen in the scrolling tab strip. */
+  function ensureTabVisible(btn) {
+    var navBox = els.nav.getBoundingClientRect();
+    var btnBox = btn.getBoundingClientRect();
+    var pad = 16;
+    var delta = 0;
+
+    if (btnBox.left < navBox.left + pad) {
+      delta = btnBox.left - navBox.left - pad;
+    } else if (btnBox.right > navBox.right - pad) {
+      delta = btnBox.right - navBox.right + pad;
+    }
+    if (!delta) return;
+
+    var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (els.nav.scrollBy) {
+      els.nav.scrollBy({ left: delta, behavior: reduce ? 'auto' : 'smooth' });
+    } else {
+      els.nav.scrollLeft += delta;
+    }
   }
 
   /**
@@ -275,24 +309,89 @@
     });
   }
 
-  function wireSlider() {
+  var currentLevel = DEFAULT_LEVEL;
+
+  function setLevel(value, syncSlider) {
+    value = Math.min(MAX_LEVEL, Math.max(MIN_LEVEL, value | 0));
+    if (value === currentLevel && syncSlider !== 'force') return;
+
+    currentLevel = value;
+    if (syncSlider) els.slider.value = value;
+    els.display.textContent = value;
+    els.down.disabled = value <= MIN_LEVEL;
+    els.up.disabled = value >= MAX_LEVEL;
+    updateLevelSections(value);
+
+    // Debounced: dragging fires continuously, no need to write every tick.
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function () {
+      writeRaw(STORAGE_KEYS.level, String(value));
+    }, 200);
+  }
+
+  /**
+   * Wire a -/+ stepper with press-and-hold repeat.
+   *
+   * The slider gives roughly 3px per level on a phone, which is finer than a
+   * fingertip can place, so exact levels need discrete controls.
+   *
+   * Stepping happens on pointerdown rather than click so that holding repeats
+   * immediately and feels responsive; the synthetic click that follows is
+   * swallowed. Keyboard activation produces a click with no preceding
+   * pointerdown, so it still steps exactly once.
+   */
+  function attachStepper(btn, delta) {
+    var holdTimer = null;
+    var repeatTimer = null;
+    var handledByPointer = false;
+
+    function stop() {
+      clearTimeout(holdTimer);
+      clearInterval(repeatTimer);
+      holdTimer = repeatTimer = null;
+    }
+
+    function step() {
+      var next = currentLevel + delta;
+      if (next < MIN_LEVEL || next > MAX_LEVEL) { stop(); return; }
+      setLevel(next, true);
+    }
+
+    btn.addEventListener('pointerdown', function (e) {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      handledByPointer = true;
+      e.preventDefault();          // no focus ring flash, no text selection
+      step();
+      holdTimer = setTimeout(function () {
+        repeatTimer = setInterval(step, 80);
+      }, 450);
+    });
+
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (ev) {
+      btn.addEventListener(ev, stop);
+    });
+    window.addEventListener('blur', stop);
+
+    btn.addEventListener('click', function () {
+      if (handledByPointer) { handledByPointer = false; return; }
+      step();                      // keyboard (Enter/Space) path
+    });
+  }
+
+  function wireLevelControls() {
     var saved = parseInt(readRaw(STORAGE_KEYS.level), 10);
-    var level = (!isNaN(saved) && saved >= 1 && saved <= 99) ? saved : DEFAULT_LEVEL;
+    var level = (!isNaN(saved) && saved >= MIN_LEVEL && saved <= MAX_LEVEL)
+      ? saved
+      : DEFAULT_LEVEL;
 
     els.slider.value = level;
-    els.display.textContent = level;
 
     els.slider.addEventListener('input', function () {
-      var value = parseInt(els.slider.value, 10);
-      els.display.textContent = value;
-      updateLevelSections(value);
-
-      // Debounced: dragging fires this continuously, no need to write each tick.
-      clearTimeout(saveTimer);
-      saveTimer = setTimeout(function () {
-        writeRaw(STORAGE_KEYS.level, String(value));
-      }, 200);
+      setLevel(parseInt(els.slider.value, 10), false);
     });
+
+    attachStepper(els.down, -1);
+    attachStepper(els.up, 1);
 
     return level;
   }
@@ -314,10 +413,17 @@
     els.main = document.getElementById('mainContent');
     els.slider = document.getElementById('lvlSlider');
     els.display = document.getElementById('lvlDisplay');
+    els.down = document.getElementById('lvlDown');
+    els.up = document.getElementById('lvlUp');
 
     buildTabs();
-    var level = wireSlider();
+    var level = wireLevelControls();
     buildSections(level);
+
+    // 'force' so the initial paint runs even when level === DEFAULT_LEVEL.
+    currentLevel = null;
+    setLevel(level, 'force');
+
     registerServiceWorker();
   }
 

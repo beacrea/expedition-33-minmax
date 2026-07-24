@@ -44,6 +44,19 @@ Two rules:
    localStorage keys for saved progress. Appending and reordering are safe;
    renaming silently moves someone's ticks to the wrong row.
 
+## Mobile / touch notes
+
+The UI is built touch-first. If you change the header or checklist, keep these:
+
+- Every interactive element is at least 44&times;44px (`--tap`), and checklist
+  rows sit flush with no vertical gap so adjacent targets cannot overlap.
+- `touch-action: manipulation` on controls removes the 300ms double-tap delay.
+- `-webkit-tap-highlight-color` is off; `:active` states provide the feedback.
+- Hover styles are inside `@media (hover:hover)` so they do not stick after a tap.
+- The &minus;/+ steppers exist because the slider resolves to ~3px per level on a
+  phone. They step on `pointerdown` and repeat on hold.
+- Switching tabs resets scroll to the top and scrolls the active chip into view.
+
 ## Storage
 
 Progress is kept in `localStorage` under `e33_checklist` and `e33_level` — two

@@ -2,69 +2,229 @@
   --bg:#0f1115; --card:#181b22; --card2:#1f232c; --accent:#c9a15a;
   --text:#eae6df; --sub:#9aa0ab; --good:#6fbf73; --warn:#e0a458; --bad:#d9695f;
   --border:#2a2f3a;
+  --tap:44px;               /* minimum comfortable touch target */
+  --pad-l:max(16px, env(safe-area-inset-left));
+  --pad-r:max(16px, env(safe-area-inset-right));
 }
 *{box-sizing:border-box;}
+
+html{
+  -webkit-text-size-adjust:100%;   /* stop iOS inflating text in landscape */
+  text-size-adjust:100%;
+}
+
 body{
   margin:0; background:var(--bg); color:var(--text);
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-  padding-bottom:60px;
-  padding-bottom:calc(60px + env(safe-area-inset-bottom));
+  padding-bottom:calc(40px + env(safe-area-inset-bottom));
+  -webkit-tap-highlight-color:transparent;   /* replaced by explicit :active states */
 }
+
+/* Anything tappable: kill the 300ms double-tap delay and stop long-press
+   from selecting label text instead of toggling the control. */
+button, input, label, select{
+  touch-action:manipulation;
+}
+nav button, .checklist label, .step{
+  -webkit-user-select:none; user-select:none;
+}
+
+/* ---------- Header ---------- */
+
 header{
   position:sticky; top:0; z-index:50; background:var(--bg);
-  padding:14px 16px 8px; border-bottom:1px solid var(--border);
+  padding:14px var(--pad-r) 8px var(--pad-l);
   padding-top:calc(14px + env(safe-area-inset-top));
+  border-bottom:1px solid var(--border);
 }
-h1{font-size:1.15rem; margin:0 0 8px; color:var(--accent); letter-spacing:.5px;}
-.levelbar{display:flex; gap:8px; align-items:center; margin-bottom:8px;}
-.levelbar input[type=range]{flex:1; accent-color:var(--accent);}
-.levelbar .lvlnum{
-  background:var(--card2); border:1px solid var(--border); border-radius:8px;
-  padding:4px 10px; font-weight:600; min-width:42px; text-align:center;
+h1{font-size:1.15rem; margin:0 0 10px; color:var(--accent); letter-spacing:.5px;}
+
+/* ---------- Level control ---------- */
+
+.levelbar{display:flex; gap:8px; align-items:center; margin-bottom:6px;}
+
+/* Stepper buttons. The slider alone gives ~2.9px per level on a phone,
+   which is finer than a fingertip can resolve, so exact levels need these. */
+.step{
+  flex:0 0 auto;
+  width:var(--tap); height:var(--tap);
+  display:flex; align-items:center; justify-content:center;
+  background:var(--card2); color:var(--text);
+  border:1px solid var(--border); border-radius:12px;
+  font-size:1.35rem; line-height:1; font-family:inherit;
+  cursor:pointer; transition:background .12s ease, transform .06s ease;
 }
-nav{display:flex; overflow-x:auto; gap:6px; padding:4px 0 2px; -webkit-overflow-scrolling:touch;}
+.step:active{background:var(--accent); color:#1a1400; transform:scale(.94);}
+.step:disabled{opacity:.35; pointer-events:none;}
+
+.lvlnum{
+  flex:0 0 auto;
+  background:var(--card2); border:1px solid var(--border); border-radius:10px;
+  padding:0 10px; min-width:62px; height:var(--tap);
+  display:flex; align-items:center; justify-content:center; gap:4px;
+  font-weight:600; font-variant-numeric:tabular-nums;
+}
+.lvlnum .cap{color:var(--sub); font-size:.72rem; font-weight:500;}
+
+/* Slider: transparent 44px-tall hit area with a thin visible track inside,
+   so the finger target is full height while the track stays slim. */
+.levelbar input[type=range]{
+  flex:1 1 auto; min-width:0;
+  height:var(--tap); margin:0;
+  background:transparent; cursor:pointer;
+  -webkit-appearance:none; appearance:none;
+}
+.levelbar input[type=range]:focus{outline:none;}
+.levelbar input[type=range]:focus-visible::-webkit-slider-thumb{
+  box-shadow:0 0 0 3px rgba(201,161,90,.4);
+}
+
+.levelbar input[type=range]::-webkit-slider-runnable-track{
+  height:8px; border-radius:4px;
+  background:var(--card2); border:1px solid var(--border);
+}
+.levelbar input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none; appearance:none;
+  width:28px; height:28px; border-radius:50%;
+  background:var(--accent); border:2px solid var(--bg);
+  margin-top:-12px;   /* centres the 32px thumb box on the 10px track box */
+}
+.levelbar input[type=range]::-moz-range-track{
+  height:8px; border-radius:4px;
+  background:var(--card2); border:1px solid var(--border);
+}
+.levelbar input[type=range]::-moz-range-thumb{
+  width:28px; height:28px; border-radius:50%;
+  background:var(--accent); border:2px solid var(--bg);
+}
+
+/* ---------- Tabs ---------- */
+
+nav{
+  display:flex; gap:6px; padding:2px 0;
+  overflow-x:auto; overflow-y:hidden;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:none;
+  scroll-padding-inline:16px;      /* keeps scrollIntoView off the edges */
+  overscroll-behavior-x:contain;   /* no accidental back-swipe navigation */
+}
+nav::-webkit-scrollbar{display:none;}
+
 nav button{
-  flex:0 0 auto; background:var(--card2); color:var(--sub); border:1px solid var(--border);
-  border-radius:20px; padding:7px 14px; font-size:.82rem; white-space:nowrap;
-  font-family:inherit; cursor:pointer;
+  flex:0 0 auto;
+  min-height:var(--tap); padding:0 16px;
+  display:inline-flex; align-items:center;
+  background:var(--card2); color:var(--sub);
+  border:1px solid var(--border); border-radius:22px;
+  font-size:.85rem; font-family:inherit; white-space:nowrap;
+  cursor:pointer; transition:background .12s ease, color .12s ease, transform .06s ease;
 }
+nav button:active{transform:scale(.96);}
 nav button.active{background:var(--accent); color:#1a1400; border-color:var(--accent); font-weight:600;}
+
+/* Keyboard focus only. :focus-within would leave a ring on the row after a
+   plain tap, which reads as a stuck selection on touch. */
 nav button:focus-visible,
-.checklist label:focus-within{outline:2px solid var(--accent); outline-offset:2px;}
-main{padding:14px 16px 40px; max-width:760px; margin:0 auto;}
+.step:focus-visible,
+.checklist label:has(input:focus-visible){outline:2px solid var(--accent); outline-offset:2px;}
+
+/* ---------- Content ---------- */
+
+main{padding:14px var(--pad-r) 40px var(--pad-l); max-width:760px; margin:0 auto;}
 section{display:none;}
 section.active{display:block;}
+
 .card{
   background:var(--card); border:1px solid var(--border); border-radius:12px;
   padding:14px; margin-bottom:12px;
 }
 .card h2{margin:0 0 6px; font-size:1rem; color:var(--accent);}
-.card h3{margin:10px 0 4px; font-size:.88rem; color:var(--text); opacity:.9;}
-.tag{display:inline-block; font-size:.7rem; padding:2px 8px; border-radius:10px; margin-right:4px; margin-bottom:4px;}
+.card h3{margin:10px 0 4px; font-size:.9rem; color:var(--text); opacity:.9;}
+.tag{display:inline-block; font-size:.72rem; padding:2px 8px; border-radius:10px; margin-right:4px; margin-bottom:4px;}
 .tag.tier1{background:#2c3e2c; color:var(--good);}
 .tag.tier2{background:#3a3220; color:var(--warn);}
 .tag.tier3{background:#3a2a24; color:var(--warn);}
 .tag.tier4{background:#3a2424; color:var(--bad);}
 .priority{font-size:.95rem; font-weight:600; margin:4px 0;}
-ul{margin:6px 0 6px 18px; padding:0; font-size:.9rem; line-height:1.5;}
-li{margin-bottom:2px;}
-.sub{color:var(--sub); font-size:.82rem;}
+ul{margin:6px 0 6px 18px; padding:0; font-size:.92rem; line-height:1.55;}
+li{margin-bottom:4px;}
+.sub{color:var(--sub); font-size:.85rem; line-height:1.5;}
 .grid2{display:grid; grid-template-columns:1fr 1fr; gap:8px;}
 .stat-pill{
   background:var(--card2); border:1px solid var(--border); border-radius:8px;
-  padding:8px 10px; font-size:.82rem;
+  padding:8px 10px; font-size:.84rem;
 }
-.stat-pill b{color:var(--accent); display:block; font-size:.78rem; margin-bottom:2px;}
+.stat-pill b{color:var(--accent); display:block; font-size:.8rem; margin-bottom:2px;}
 .active-tier{border:1px solid var(--accent) !important; box-shadow:0 0 0 1px var(--accent) inset;}
-.checklist label{
-  display:flex; align-items:flex-start; gap:8px; font-size:.88rem; margin-bottom:6px; cursor:pointer;
-}
-.checklist input{margin-top:3px; accent-color:var(--accent);}
-.checklist input:checked + span{ text-decoration:line-through; color:var(--sub);}
 .divider{border-top:1px solid var(--border); margin:10px 0;}
-.footer-note{color:var(--sub); font-size:.75rem; text-align:center; margin-top:20px; padding:0 16px;}
+
+/* ---------- Checklist ---------- */
+
+/* Full-width rows at least 44px tall with no vertical gap, so adjacent
+   targets sit flush instead of overlapping into each other's slop. */
+.checklist{margin:0 -6px;}
+.checklist label{
+  display:flex; align-items:center; gap:12px;
+  min-height:var(--tap); padding:8px 6px;
+  font-size:.9rem; line-height:1.4;
+  border-radius:8px; cursor:pointer;
+  transition:background .12s ease;
+}
+.checklist label:active{background:var(--card2);}
+.checklist label + label{border-top:1px solid var(--border);}
+.checklist input{
+  flex:0 0 auto;
+  width:22px; height:22px; margin:0;
+  accent-color:var(--accent);
+}
+.checklist input:checked + span{text-decoration:line-through; color:var(--sub);}
+
+.footer-note{
+  color:var(--sub); font-size:.78rem; text-align:center;
+  margin-top:20px; padding:0 var(--pad-r) 0 var(--pad-l); line-height:1.5;
+}
+
 select{
   background:var(--card2); color:var(--text); border:1px solid var(--border);
-  border-radius:8px; padding:8px; font-size:.9rem; width:100%;
+  border-radius:8px; padding:10px; font-size:1rem; width:100%;
+  min-height:var(--tap);
 }
 .badge-row{display:flex; flex-wrap:wrap; gap:6px; margin-top:4px;}
+
+/* ---------- Adaptive ---------- */
+
+/* Short screens (small phones, landscape): reclaim sticky-header height. */
+@media (max-height:600px){
+  header{padding-top:calc(8px + env(safe-area-inset-top)); padding-bottom:6px;}
+  h1{font-size:1rem; margin-bottom:6px;}
+}
+
+/* Very short (phone landscape): the sticky header was eating a third of the
+   viewport. Drop the title visually but keep it for assistive tech — the app
+   name is already in the title bar and the tab strip gives the context. */
+@media (max-height:500px){
+  h1{
+    position:absolute; width:1px; height:1px; margin:0;
+    padding:0; overflow:hidden; clip-path:inset(50%); white-space:nowrap;
+  }
+}
+
+/* Narrow phones: tighten gaps so the level row still fits on one line. */
+@media (max-width:359px){
+  .levelbar{gap:6px;}
+  .lvlnum{min-width:54px; padding:0 6px;}
+  nav button{padding:0 13px; font-size:.82rem;}
+}
+
+/* Pointer-based devices get hover states; touch devices must not, or the
+   hover style sticks after a tap. */
+@media (hover:hover) and (pointer:fine){
+  nav button:hover{color:var(--text); border-color:var(--accent);}
+  nav button.active:hover{color:#1a1400;}
+  .step:hover{border-color:var(--accent);}
+  .checklist label:hover{background:var(--card2);}
+}
+
+@media (prefers-reduced-motion:reduce){
+  *{transition:none !important; animation:none !important; scroll-behavior:auto !important;}
+}

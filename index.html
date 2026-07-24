@@ -25,9 +25,10 @@
 <header>
   <h1>⚔ Expedition 33 — Build Reference</h1>
   <div class="levelbar">
-    <label class="sub" for="lvlSlider">Lv</label>
-    <input type="range" id="lvlSlider" min="1" max="99" value="12" aria-describedby="lvlDisplay">
-    <span class="lvlnum" id="lvlDisplay" aria-live="polite">12</span>
+    <button type="button" class="step" id="lvlDown" aria-label="Decrease level">&minus;</button>
+    <input type="range" id="lvlSlider" min="1" max="99" value="12" step="1" aria-label="Character level">
+    <button type="button" class="step" id="lvlUp" aria-label="Increase level">+</button>
+    <span class="lvlnum"><span class="cap" aria-hidden="true">Lv</span><span id="lvlDisplay">12</span></span>
   </div>
   <nav id="tabnav" role="tablist" aria-label="Guide sections"></nav>
 </header>
