@@ -1,7 +1,8 @@
 # Expedition 33 Build Reference
 
 A mobile-friendly, installable PWA covering *Clair Obscur: Expedition 33* attribute
-allocation, Picto/Lumina priorities, and per-character build notes.
+allocation, Picto/Lumina priorities, per-character build notes, and a
+skill-point spend guide that tells you what to unlock next at your level.
 
 **Live:** https://beacrea.github.io/expedition-33-minmax/
 
@@ -22,13 +23,49 @@ fully offline afterwards.
 ```
 index.html      Shell markup only
 css/styles.css  All styling
-js/data.js      ← edit this: tiers, characters, pictos, checklist
+js/data.js      ← edit this: tiers, characters, skill builds, pictos, checklist
 js/app.js       Rendering + storage logic
 sw.js           Cache-first service worker
 manifest.json   PWA manifest
 icons/          Generated icon set
 tools/          Icon generator
 ```
+
+## How the skill guide works
+
+Skills in this game are **not gated by character level**. Every level-up banks
+1 skill point and 3 attribute points, and a skill unlocks when you can pay its
+SP cost *and* already own its prerequisite node. So "what unlocks at level 30"
+is really "I have ~29 SP banked — what is the best order to spend it in".
+
+`skillBuilds` in `js/data.js` answers that with a recommended spend order per
+character. The app derives the budget as `level - 1`, walks the running SP
+total, and labels each step:
+
+| State | Meaning |
+| --- | --- |
+| ✓ in budget | Affordable with the points you have at this level |
+| next up | The next purchase, and how many more SP it needs |
+| ≈ level N | Roughly the level where the running total becomes affordable |
+
+Status is applied by swapping classes, not re-rendering, so dragging the level
+slider stays cheap and does not rebuild the character sections.
+
+Two honesty caveats are baked into the UI:
+
+- **Costs are disputed.** Wikis disagree on many SP costs (patch drift), so
+  entries carry an optional `spHi`. Where present the UI shows a range, running
+  totals use the *lowest* figure and are labelled a floor, and the footer states
+  the full-path spread. Verso's path is 72–102 SP depending on the source.
+- **Gradient skills are separate.** They cost no SP and unlock via story
+  progress and Relationship Level, so they are listed apart from the SP path.
+
+Monoco is a special case (`mode: 'feet'`): his skills come from defeating enemy
+types while he is in the active party, so his entry is a hunting list keyed to
+the source enemy rather than an SP order.
+
+The spend orders are validated at generation time — every entry's prerequisite
+is either a starting skill or appears earlier in the list.
 
 ## Editing content
 

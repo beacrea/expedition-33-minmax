@@ -8,7 +8,7 @@
  * IMPORTANT: bump CACHE_VERSION whenever you edit js/data.js, css/styles.css,
  * or index.html — otherwise returning visitors keep the cached copy.
  */
-var CACHE_VERSION = 'v4';
+var CACHE_VERSION = 'v5';
 var CACHE_NAME = 'e33-guide-' + CACHE_VERSION;
 
 var SHELL = [

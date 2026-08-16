@@ -308,6 +308,146 @@
       '</div>';
   }
 
+  /*
+   * Skill builds.
+   *
+   * Levels do not unlock skills in this game. Each level-up banks 1 skill
+   * point and 3 attribute points, and a skill unlocks when you can pay its SP
+   * cost and already own its prerequisite node. So the SP budget at a level is
+   * just (level - 1), and the useful question is how far down a recommended
+   * spend order that budget reaches.
+   *
+   * Status is applied by updateSkillStatus() mutating classes and badge text
+   * rather than re-rendering the markup, so dragging the level slider stays
+   * cheap and the character sections never need to be rebuilt.
+   */
+  function spAtLevel(level) { return Math.max(0, level - 1); }
+  function attrAtLevel(level) { return 3 * Math.max(0, level - 1); }
+
+  function renderMonocoFeet(b) {
+    var phases = [
+      { id: 'early', label: 'Early — grab these as soon as you can' },
+      { id: 'mid', label: 'Mid game' },
+      { id: 'late', label: 'Late game / Act 3+' }
+    ];
+    return '' +
+      '<p class="sub">Monoco is the exception. His skills come from <b>defeating enemy types while he is in the active party</b> and taking their foot — not from spending skill points. Treat this as a hunting list; his banked points still go into attributes.</p>' +
+      phases.map(function (p) {
+        var rows = b.path.filter(function (s) { return s.phase === p.id; });
+        if (!rows.length) return '';
+        return '<div class="divider"></div><h4>' + p.label + '</h4>' +
+          '<ul class="feet">' + rows.map(function (s) {
+            return '<li>' +
+                '<div class="skill-h">' +
+                  '<span class="skill-n">' + s.n + '</span>' +
+                  '<span class="skill-sp foot">from ' + s['from'] + '</span>' +
+                '</div>' +
+                '<p class="skill-why">' + s.why + '</p>' +
+                '<p class="sub skill-fx">' + s.fx + '</p>' +
+              '</li>';
+          }).join('') + '</ul>';
+      }).join('');
+  }
+
+  function renderSkillBuild(key) {
+    var b = data.skillBuilds && data.skillBuilds[key];
+    if (!b) return '';
+
+    var html = '' +
+      '<div class="card">' +
+        '<h3>Skill points — what to spend them on</h3>' +
+        '<p class="sub">Skills are not gated by level. Each level-up banks <b>1 skill point</b> and <b>3 attribute points</b>, spent at an Expedition Flag. A skill needs its SP cost paid and its prerequisite owned, so the only real decision is order. A <b>Recoat</b> refunds every point if you want to re-plan.</p>' +
+        '<p class="budget" data-budget></p>';
+
+    if (b.starting && b.starting.length) {
+      html += '<p class="sub">Unlocked from the start: ' + b.starting.join(', ') + '.</p>';
+    }
+
+    if (b.mode === 'feet') {
+      html += renderMonocoFeet(b);
+    } else {
+      // Wikis disagree on a lot of SP costs, so track both a low and a high
+      // running total. `cum` (the low figure) drives the status classes, and
+      // the spread is shown wherever it is non-zero so the numbers are not
+      // presented as more certain than they are.
+      var cum = 0;
+      var cumHi = 0;
+      var disputed = 0;
+      html += '<ol class="skillpath">' + b.path.map(function (s) {
+        var hi = s.spHi || s.sp;
+        if (s.spHi) disputed++;
+        cum += s.sp;
+        cumHi += hi;
+        var cost = (s.spHi ? s.sp + '–' + s.spHi : String(s.sp)) + ' SP';
+        var spent = (cumHi > cum ? cum + '–' + cumHi : String(cum)) + ' SP spent by here';
+        return '<li class="skill" data-cum="' + cum + '">' +
+            '<div class="skill-h">' +
+              '<span class="skill-n">' + s.n + '</span>' +
+              '<span class="skill-sp">' + cost + '</span>' +
+            '</div>' +
+            '<div class="skill-meta">' +
+              '<span class="badge" data-badge></span>' +
+              '<span class="sub">' + spent + '</span>' +
+            '</div>' +
+            '<p class="skill-why">' + s.why + '</p>' +
+            '<p class="sub skill-fx">' + s.fx + '</p>' +
+          '</li>';
+      }).join('') + '</ol>';
+
+      if (cumHi > cum) {
+        html += '<p class="sub">The whole path costs <b>' + cum + '–' + cumHi + ' SP</b> — ' +
+          disputed + ' of these ' + b.path.length + ' skills have costs that differ between wikis, ' +
+          'so figure on being fully built somewhere between level ' + (cum + 1) + ' and ' + (cumHi + 1) + '. ' +
+          'Running totals above use the lowest reported cost, so treat them as a floor.</p>';
+      } else {
+        html += '<p class="sub">The whole path costs <b>' + cum + ' SP</b>, so it is fully built around level ' + (cum + 1) + '.</p>';
+      }
+    }
+
+    if (b.gradients && b.gradients.length) {
+      html += '<div class="divider"></div>' +
+        '<h3>Gradient skills</h3>' +
+        '<p class="sub">These cost no skill points. They come from story progress and Relationship Level, raised by talking at camp.</p>' +
+        '<ul class="grads">' + b.gradients.map(function (g) {
+          return '<li><b>' + g.n + '</b><span class="sub"> — ' + g.when + '</span>' +
+                 '<p class="sub skill-fx">' + g.fx + '</p></li>';
+        }).join('') + '</ul>';
+    }
+
+    return html + '</div>';
+  }
+
+  function updateSkillStatus(level) {
+    var sp = spAtLevel(level);
+
+    els.main.querySelectorAll('[data-budget]').forEach(function (el) {
+      el.innerHTML = 'At level ' + level + ' you have banked roughly <b>' + sp +
+        ' skill points</b> and <b>' + attrAtLevel(level) + ' attribute points</b>.';
+    });
+
+    els.main.querySelectorAll('.skillpath').forEach(function (list) {
+      var flaggedNext = false;
+      list.querySelectorAll('.skill').forEach(function (li) {
+        // data-cum is the running SP total, so cum <= budget means every skill
+        // up to and including this one is payable with the points on hand.
+        var cum = parseInt(li.dataset.cum, 10);
+        var badge = li.querySelector('[data-badge]');
+        li.classList.remove('in-budget', 'next', 'later');
+        if (cum <= sp) {
+          li.classList.add('in-budget');
+          if (badge) badge.textContent = '✓ in budget';
+        } else if (!flaggedNext) {
+          flaggedNext = true;
+          li.classList.add('next');
+          if (badge) badge.textContent = 'next up — ' + (cum - sp) + ' more SP';
+        } else {
+          li.classList.add('later');
+          if (badge) badge.textContent = '≈ level ' + (cum + 1);
+        }
+      });
+    });
+  }
+
   function renderCharacter(key) {
     var c = data.characters[key];
     var list = function (items) {
@@ -318,8 +458,9 @@
         '<h2>' + c.label + ' <span class="sub">— ' + c.role + '</span></h2>' +
         '<div class="priority">Attributes: ' + c.attrs + '</div>' +
       '</div>' +
+      renderSkillBuild(key) +
       '<div class="card">' +
-        '<h3>Early game (Act 1)</h3>' + list(c.early) +
+        '<h3>Pictos &amp; Luminas — early game (Act 1)</h3>' + list(c.early) +
         '<div class="divider"></div>' +
         '<h3>Mid game</h3>' + list(c.mid) +
         '<div class="divider"></div>' +
@@ -510,11 +651,16 @@
 
     wireChecklist();
     wireBackup();
+    updateSkillStatus(level);
   }
 
   function updateLevelSections(level) {
     document.getElementById('overview').innerHTML = renderOverview(level);
     document.getElementById('attributes').innerHTML = renderAttributes(level);
+    // Character sections are deliberately NOT re-rendered here — the skill path
+    // markup is static and only its status classes depend on level, so mutating
+    // them in place keeps slider drags cheap.
+    updateSkillStatus(level);
   }
 
   function wireChecklist() {
