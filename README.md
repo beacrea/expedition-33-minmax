@@ -90,8 +90,38 @@ alone did not deliver the update. Precaching is also all-or-nothing, so a
 failed file leaves the previous version in charge rather than activating a
 mixed-version shell.
 
-An update reaches an open tab on the second load: the first fetches the new
-worker, the second is served by it.
+### How updates reach a returning visitor
+
+iOS home-screen installs (Add to Home Screen) don't reliably re-check `sw.js`
+on their own — there's no reload button, no pull-to-refresh, and "closing"
+the app via the app switcher doesn't guarantee a real navigation event the
+way a browser tab reload does. Waiting for the browser's own update check was
+reproduced as insufficient: a visitor closed and reopened the installed app
+several times and stayed on an old version well after a new one had shipped.
+
+To fix that, `app.js` now drives the check itself instead of waiting on it:
+
+- It calls `registration.update()` right after registering, and again every
+  time the page regains visibility (covers the home-screen-PWA "reopen"
+  case, which resumes an already-loaded page rather than re-running scripts
+  from scratch).
+- `sw.js` no longer calls `self.skipWaiting()` unconditionally on install.
+  When an existing worker is already controlling the page, a newly installed
+  worker now parks in the `waiting` state instead of taking over and
+  reloading silently.
+- When a worker is waiting, the page shows an "Update now" banner
+  (`#updateBanner` in `index.html`). Tapping it posts a message the worker
+  listens for, which is what actually calls `skipWaiting()` — the update only
+  lands when the user asks for it, so it can never interrupt an in-progress
+  read or an open Export/Restore action.
+- A first-ever install (no previous worker holding the page) still activates
+  on its own, since there's nothing to protect the user from in that case.
+
+One caveat: this logic only takes effect once a device is already running a
+version that includes it. A device stuck on a version from *before* this
+fix still has the old always-`skipWaiting()` worker in charge, so its first
+update after this ships will still auto-reload silently, same as before.
+Every update after that one will show the banner as designed.
 
 ## Mobile / touch notes
 

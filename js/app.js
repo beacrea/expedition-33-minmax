@@ -763,13 +763,89 @@
     return level;
   }
 
+  /*
+   * Service worker registration + update prompt.
+   *
+   * The spec says a browser SHOULD check for a new sw.js on every
+   * navigation, but that check only fires the browser's own HTTP cache
+   * (GitHub Pages sends `max-age=600`), and iOS home-screen PWAs are
+   * unreliable about running it at all — there's no reload button, no
+   * pull-to-refresh, and no guaranteed second organic load the way a
+   * browser tab gets. Observed in practice: a v4 install stayed on v4
+   * through several manual close/reopen cycles well after v5 had shipped.
+   *
+   * So instead of waiting for that automatic check, this calls
+   * registration.update() itself on every launch and whenever the app
+   * regains foreground focus, which forces sw.js to be refetched from the
+   * network (bypassing the page's own HTTP cache semantics — update()
+   * always issues a real request). If that turns up a new worker, it
+   * installs in the background per the normal SW lifecycle, and once it
+   * reaches 'installed' (waiting to activate) this shows a banner instead
+   * of silently hoping for another load. Reload is a user tap, not
+   * automatic, so it never interrupts an in-progress read or an open
+   * Export/Restore action.
+   */
+  function showUpdateBanner(reg) {
+    var banner = document.getElementById('updateBanner');
+    var btn = document.getElementById('updateReloadBtn');
+    if (!banner || !btn) return;
+    banner.hidden = false;
+    btn.addEventListener('click', function () {
+      btn.disabled = true;
+      btn.textContent = 'Updating…';
+      // Tell the waiting worker to activate now instead of waiting for every
+      // tab to close (skipWaiting() in install already does this on its own
+      // timeline; this just makes the user's tap the trigger for *this* tab).
+      if (reg.waiting) reg.waiting.postMessage('skipWaiting');
+    }, { once: true });
+  }
+
   function registerServiceWorker() {
     // Guarded: service workers are unavailable (and throw) under file://.
     if (!('serviceWorker' in navigator)) return;
     if (location.protocol !== 'http:' && location.protocol !== 'https:') return;
 
+    // A new worker activating mid-session (after the user taps "Update now")
+    // should reload the page exactly once, not once per controllerchange.
+    var reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', function () {
+      if (reloaded) return;
+      reloaded = true;
+      window.location.reload();
+    });
+
     window.addEventListener('load', function () {
-      navigator.serviceWorker.register('./sw.js').catch(function (err) {
+      navigator.serviceWorker.register('./sw.js').then(function (reg) {
+        // Case 1: a worker was already waiting from a previous visit that
+        // never got reloaded into control (exactly the stuck-on-old-version
+        // case this exists to fix).
+        if (reg.waiting) showUpdateBanner(reg);
+
+        // Case 2: a new worker starts installing during this visit. It only
+        // parks in reg.waiting (rather than activating on its own) when an
+        // existing worker already controls this page — i.e. exactly the
+        // "there is an update" case, as opposed to a first-ever install.
+        reg.addEventListener('updatefound', function () {
+          var installing = reg.installing;
+          if (!installing) return;
+          installing.addEventListener('statechange', function () {
+            if (installing.state === 'installed' && reg.waiting) {
+              showUpdateBanner(reg);
+            }
+          });
+        });
+
+        // Force an immediate network check for a fresher sw.js right now,
+        // rather than waiting on the browser's own schedule for it.
+        reg.update().catch(function () {});
+
+        // And again whenever the app comes back to the foreground — covers
+        // the home-screen-PWA case where "reopening" resumes an already-
+        // loaded page instead of running this script from scratch.
+        document.addEventListener('visibilitychange', function () {
+          if (document.visibilityState === 'visible') reg.update().catch(function () {});
+        });
+      }).catch(function (err) {
         console.warn('[e33] service worker registration failed', err);
       });
     });

@@ -337,3 +337,31 @@ select{
   .skillpath > li, .feet > li, .grads > li{padding:9px 9px;}
   .skill-n{font-size:.9rem;}
 }
+
+/* ---------- Update-available banner ----------
+   Shown when a new service worker has installed and is waiting to take
+   over. Reload is a deliberate user tap rather than an automatic reload,
+   because auto-reloading mid-read (or mid form-fill in Export/Restore)
+   would be jarring and could interrupt an in-progress interaction. */
+.update-banner{
+  display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between;
+  gap:8px 12px;
+  margin:12px var(--pad-r) 0 var(--pad-l);
+  padding:11px 14px;
+  border:1px solid var(--accent);
+  border-radius:10px;
+  background:#2a2410;
+  color:var(--text);
+  font-size:.9rem;
+  line-height:1.4;
+}
+@media (min-width:792px){ .update-banner{margin-inline:auto;} }
+
+.btn-primary{
+  flex:0 0 auto;
+  background:var(--accent);
+  border-color:var(--accent);
+  color:#1a1400;
+  font-weight:600;
+}
+.btn-primary:active{background:#b6893f; transform:scale(.98);}

@@ -8,7 +8,7 @@
  * IMPORTANT: bump CACHE_VERSION whenever you edit js/data.js, css/styles.css,
  * or index.html — otherwise returning visitors keep the cached copy.
  */
-var CACHE_VERSION = 'v5';
+var CACHE_VERSION = 'v6';
 var CACHE_NAME = 'e33-guide-' + CACHE_VERSION;
 
 var SHELL = [
@@ -39,6 +39,14 @@ var SHELL = [
  * stays in charge, so we never activate a half-updated, mixed-version shell.
  * Mixed versions are the dangerous case, because stale app.js against fresh
  * data.js is exactly how a migration corrupts saved progress.
+ *
+ * This version deliberately does NOT call self.skipWaiting() here. Doing so
+ * unconditionally meant a freshly installed worker activated and reloaded
+ * every open tab immediately and silently — fine on a laptop, but jarring if
+ * it happens mid-edit (e.g. mid Export/Restore) on a phone. Instead the new
+ * worker parks itself in the "waiting" state, app.js surfaces an "Update now"
+ * banner, and skipWaiting only runs when the user taps it (see the message
+ * handler below) or when no old worker is holding it back in the first place.
  */
 self.addEventListener('install', function (event) {
   event.waitUntil(
@@ -53,8 +61,19 @@ self.addEventListener('install', function (event) {
           });
         }));
       })
-      .then(function () { return self.skipWaiting(); })
   );
+});
+
+/**
+ * Let the page hand control to a waiting worker on demand.
+ *
+ * app.js posts this after the user taps "Update now" on the update banner.
+ * skipWaiting() moves this worker out of "waiting" into "activating", which
+ * fires the activate handler below and then 'controllerchange' on the page,
+ * which is what actually triggers the reload.
+ */
+self.addEventListener('message', function (event) {
+  if (event.data === 'skipWaiting') self.skipWaiting();
 });
 
 /**
